@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIダンジョン冒険 — Solana Devnet Edition</title>
+<!-- Solana web3.js (v1 IIFE build: window.solanaWeb3) -->
+<script src="https://unpkg.com/@solana/web3.js@1.98.4/lib/index.iife.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0d14;
+    --panel: #1a1622;
+    --panel2: #231d2e;
+    --line: #3a3048;
+    --text: #e8e2f0;
+    --muted: #9a90a8;
+    --gold: #e8c46a;
+    --hp: #d9534f;
+    --ok: #5cb85c;
+    --accent: #9b6dff;
+    --sol: #14f195;
+    --common: #c8c8c8;
+    --rare: #4ea3ff;
+    --epic: #b46dff;
+    --legendary: #ffa53d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+    background: radial-gradient(ellipse at top, #241a33 0%, var(--bg) 60%);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 20px; border-bottom: 1px solid var(--line); background: rgba(15,13,20,.85);
+    position: sticky; top: 0; z-index: 10; flex-wrap: wrap;
+  }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: .05em; }
+  header h1 span { color: var(--sol); font-size: 12px; margin-left: 8px; border: 1px solid var(--sol); padding: 1px 6px; border-radius: 4px; }
+  .hdr-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; transition: .15s;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); background: #2d2440; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: linear-gradient(135deg, #7a4dff, #5a2fd6); border-color: #8d66ff; }
+  button.sol { background: linear-gradient(135deg, #0f8f63, #127a8f); border-color: var(--sol); }
+  .badge { font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.ai { color: var(--sol); border-color: var(--sol); }
+  .badge.off { color: var(--gold); border-color: var(--gold); }
+  main { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 16px 20px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .panel h2 { font-size: 14px; color: var(--muted); margin: 0 0 10px; font-weight: normal; letter-spacing: .1em; }
+  .stat { display: flex; justify-content: space-between; margin: 6px 0; font-size: 14px; }
+  .bar { height: 10px; background: #2b2333; border-radius: 6px; overflow: hidden; margin: 4px 0 10px; }
+  .bar > div { height: 100%; background: linear-gradient(90deg, #a12f2c, var(--hp)); transition: width .3s; }
+  .bar.depth > div { background: linear-gradient(90deg, #5a2fd6, var(--accent)); }
+  .inv { list-style: none; padding: 0; margin: 0; max-height: 280px; overflow-y: auto; }
+  .inv li { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; font-size: 13px; background: var(--panel2); }
+  .inv li.usable { cursor: pointer; }
+  .inv li.usable:hover { border-color: var(--ok); }
+  .inv .desc { color: var(--muted); font-size: 11px; }
+  .r-common { color: var(--common); } .r-rare { color: var(--rare); } .r-epic { color: var(--epic); } .r-legendary { color: var(--legendary); }
+  #story { height: 340px; overflow-y: auto; padding-right: 6px; }
+  #story p { margin: 0 0 10px; line-height: 1.75; font-size: 14px; }
+  #story p.action { color: var(--accent); font-size: 13px; }
+  #story p.sys { color: var(--gold); font-size: 13px; }
+  #story p.dmg { color: #ff8a80; font-size: 13px; }
+  #story p.good { color: #9be89b; font-size: 13px; }
+  .scene { margin-top: 14px; }
+  .scene-type { font-size: 12px; color: var(--muted); }
+  .scene h3 { margin: 4px 0 8px; font-size: 18px; }
+  .scene .text { line-height: 1.8; white-space: pre-wrap; }
+  .enemy { margin: 10px 0; padding: 10px; border: 1px solid #5a2a2a; background: #2a1618; border-radius: 8px; }
+  .enemy .bar > div { background: linear-gradient(90deg, #7a1f1f, #e05050); }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  @media (max-width: 600px) { .choices { grid-template-columns: 1fr; } }
+  .choices button { text-align: left; padding: 12px; }
+  .loading { color: var(--muted); font-size: 14px; margin-top: 12px; display: none; }
+  .loading.show { display: block; }
+  .loading::after { content: "…"; animation: dots 1.2s infinite; }
+  @keyframes dots { 0%{content:"."} 33%{content:".."} 66%{content:"..."} }
+  .center { text-align: center; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: min(620px, 100%); max-height: 90vh; overflow-y: auto; }
+  .modal h2 { margin-top: 0; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  input, select { width: 100%; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+  input[type=checkbox] { width: auto; }
+  .note { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .result-title { font-size: 32px; text-align: center; margin: 4px 0; }
+  .result-title.win { color: var(--gold); text-shadow: 0 0 18px rgba(232,196,106,.5); }
+  .result-title.lose { color: var(--hp); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+  .grid2 .cell { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .grid2 .cell b { display: block; font-size: 20px; }
+  .rank { font-size: 48px; font-weight: bold; text-align: center; color: var(--gold); }
+  .chain { border: 1px solid var(--sol); border-radius: 10px; padding: 12px; margin-top: 14px; background: rgba(20,241,149,.05); }
+  .chain a, .hist a { color: var(--sol); word-break: break-all; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #2d2440; border: 1px solid var(--accent); padding: 10px 16px; border-radius: 10px; z-index: 100; font-size: 14px; display: none; max-width: 90vw; }
+  .toast.show { display: block; }
+  .warn { background: #3a2a10; border: 1px solid var(--gold); color: var(--gold); padding: 8px 12px; border-radius: 8px; font-size: 13px; margin: 0 20px; display: none; }
+  .warn.show { display: block; margin-top: 12px; }
+  .hist { list-style: none; padding: 0; font-size: 13px; }
+  .hist li { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  .title-screen { text-align: center; padding: 30px 10px; }
+  .title-screen .big { font-size: 44px; margin-bottom: 6px; }
+  .title-screen p { color: var(--muted); line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚔️ AIダンジョン冒険<span>Solana Devnet</span></h1>
+  <div class="hdr-right">
+    <span id="modeBadge" class="badge">-</span>
+    <button id="btnHistory" title="Devnet上の自分の記録を表示">📜 記録</button>
+    <button id="btnSettings">⚙️ 設定</button>
+    <button id="btnWallet" class="sol">👻 Phantom接続</button>
+  </div>
+</header>
+<div id="fileWarn" class="warn">⚠️ file:// で開いているため Phantom が注入されません。README の手順でローカルサーバー（http://localhost）から開いてください。ゲーム自体はこのままでも遊べます。</div>
+
+<main>
+  <aside>
+    <div class="panel">
+      <h2>STATUS</h2>
+      <div class="stat"><span>❤️ HP</span><span id="sHp">-</span></div>
+      <div class="bar"><div id="hpBar" style="width:100%"></div></div>
+      <div class="stat"><span>⚔️ 攻撃力</span><span id="sAtk">-</span></div>
+      <div class="stat"><span>🛡️ 防御力</span><span id="sDef">-</span></div>
+      <div class="stat"><span>💰 ゴールド</span><span id="sGold">-</span></div>
+      <div class="stat"><span>🏰 階層</span><span id="sFloor">-</span></div>
+      <div class="bar depth"><div id="depthBar" style="width:0%"></div></div>
+      <div class="stat"><span>⏳ ターン</span><span id="sTurn">-</span></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>INVENTORY <span class="note">（回復アイテムはクリックで使用）</span></h2>
+      <ul id="inv" class="inv"></ul>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>WALLET</h2>
+      <div class="stat"><span>アドレス</span><span id="wAddr" class="note">未接続</span></div>
+      <div class="stat"><span>残高 (Devnet)</span><span id="wBal">-</span></div>
+      <button id="btnAirdrop" style="width:100%;margin-top:6px" disabled>💧 1 SOL エアドロップ (Devnet)</button>
+    </div>
+  </aside>
+
+  <section class="panel">
+    <div id="titleScreen" class="title-screen">
+      <div class="big">🕯️</div>
+      <h2 style="color:var(--text);font-size:22px">深淵の迷宮へようこそ</h2>
+      <p>選択ひとつで物語が変わる。AIが紡ぐイベント・敵・宝物に挑み、<br>最深部の主を討ち果たせ。<br>クリア実績は Solana Devnet に永久に刻むことができる。</p>
+      <button id="btnStart" class="primary" style="font-size:18px;padding:12px 28px">冒険を始める</button>
+      <p class="note" id="titleMode"></p>
+    </div>
+    <div id="gameScreen" style="display:none">
+      <div id="story"></div>
+      <div id="scene" class="scene"></div>
+      <div id="loading" class="loading">AIが物語を紡いでいます</div>
+    </div>
+  </section>
+</main>
+
+<!-- 設定 -->
+<div id="settingsModal" class="modal-bg">
+  <div class="modal">
+    <h2>⚙️ 設定</h2>
+    <label><input type="checkbox" id="optUseAI"> AI（Claude API）で物語を生成する</label>
+    <label for="optKey">Anthropic API キー</label>
+    <input id="optKey" type="password" placeholder="sk-ant-..." autocomplete="off">
+    <label><input type="checkbox" id="optSaveKey"> このブラウザに API キーを保存する（localStorage）</label>
+    <label for="optModel">モデル</label>
+    <select id="optModel">
+      <option value="claude-opus-5-5">claude-opus-5-5（既定・高品質）</option>
+      <option value="claude-sonnet-5-5">claude-sonnet-5-5（バランス）</option>
+      <option value="claude-haiku-5-5">claude-haiku-5-5（高速・低コスト）</option>
+    </select>
+    <label for="optEndpoint">API エンドポイント（プロキシを使う場合のみ変更）</label>
+    <input id="optEndpoint" placeholder="https://api.anthropic.com/v1/messages">
+    <label for="optFloors">ダンジョンの深さ</label>
+    <select id="optFloors">
+      <option value="3">短め（3階層）</option>
+      <option value="5" selected>標準（5階層）</option>
+    </select>
+    <label for="optRpc">Solana Devnet RPC</label>
+    <input id="optRpc" placeholder="https://api.devnet.solana.com">
+    <p class="note">
+      API キーはブラウザから直接 Anthropic API に送信されます。個人のローカル利用を想定しています。公開サイトとして配信する場合はキーを埋め込まず、サーバー側プロキシを用意してエンドポイント欄に指定してください。<br>
+      AI が使えない（キー未設定・通信エラー・タイムアウト等）場合は、自動的に内蔵イベントで冒険が続きます。
+    </p>
+    <div style="text-align:right;margin-top:12px">
+      <button id="btnSettingsClose" class="primary">保存して閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- リザルト -->
+<div id="resultModal" class="modal-bg">
+  <div class="modal">
+    <div id="resultTitle" class="result-title"></div>
+    <p id="resultText" class="center note"></p>
+    <div id="resultRank" class="rank"></div>
+    <div class="grid2" id="resultGrid"></div>
+    <h3 style="margin-bottom:6px">🎒 獲得アイテム</h3>
+    <ul id="resultItems" class="inv" style="max-height:200px"></ul>
+    <div class="chain">
+      <b>⛓️ Solana Devnet に実績を記録</b>
+      <p class="note">冒険結果を Memo プログラムのトランザクションとして Devnet に書き込みます（手数料はDevnet SOL、実際の価値はありません）。</p>
+      <div id="memoPreview" class="note" style="font-family:monospace;word-break:break-all;background:#0f0d14;padding:8px;border-radius:6px"></div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="btnRecord" class="sol">📝 Devnetに記録する</button>
+      </div>
+      <div id="recordStatus" class="note" style="margin-top:8px"></div>
+    </div>
+    <div style="text-align:right;margin-top:16px">
+      <button id="btnRestart" class="primary">もう一度冒険する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 記録履歴 -->
+<div id="historyModal" class="modal-bg">
+  <div class="modal">
+    <h2>📜 Devnet 上の冒険記録</h2>
+    <div id="historyBody" class="note">ウォレットを接続してください。</div>
+    <div style="text-align:right;margin-top:12px"><button id="btnHistoryClose">閉じる</button></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+ * 定数・設定
+ * ===================================================================== */
+const ROOMS_PER_FLOOR = 3;
+const MEMO_PROGRAM_ID = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr'; // SPL Memo v2
+const DEFAULT_RPC = 'https://api.devnet.solana.com';
+const DEFAULT_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const AI_TIMEOUT_MS = 90000;
+const FALLBACK_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5'];
+const MAX_ATK = 40, MAX_DEF = 25;
+const RARITY_LABEL = { common: 'コモン', rare: 'レア', epic: 'エピック', legendary: 'レジェンダリー' };
+const RARITY_VALUE = { common: 10, rare: 50, epic: 150, legendary: 400 };
+const KIND_LABEL = { consumable: '消耗品', weapon: '武器', armor: '防具', treasure: '財宝' };
+const TYPE_LABEL = { event: '🔮 イベント', enemy: '👹 遭遇', treasure: '💎 宝物', trap: '⚠️ 罠', rest: '🔥 休息', boss: '🐉 ボス' };
+
+const settings = {
+  useAI: true,
+  apiKey: '',
+  saveKey: false,
+  model: 'claude-opus-5-5',
+  endpoint: DEFAULT_ENDPOINT,
+  floors: 5,
+  rpc: DEFAULT_RPC,
+};
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('aidungeon.settings') || '{}');
+    Object.assign(settings, s);
+    if (settings.saveKey) settings.apiKey = localStorage.getItem('aidungeon.key') || '';
+  } catch (_) { /* ignore */ }
+}
+function saveSettings() {
+  const { apiKey, ...rest } = settings;
+  localStorage.setItem('aidungeon.settings', JSON.stringify(rest));
+  if (settings.saveKey && apiKey) localStorage.setItem('aidungeon.key', apiKey);
+  else localStorage.removeItem('aidungeon.key');
+}
+const aiEnabled = () => settings.useAI && !!settings.apiKey;
+
+/* =====================================================================
+ * ユーティリティ
+ * ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const chance = (p) => Math.random() < p;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Number.isFinite(+v) ? Math.round(+v) : 0));
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+let toastTimer;
+function toast(msg, ms = 3500) {
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+/* =====================================================================
+ * アイテム定義（オフライン用）
+ * ===================================================================== */
+const ITEM_POOL = [
+  { name: '回復薬', rarity: 'common', kind: 'consumable', power: 30, description: '傷を癒やす赤い薬。HPを30回復。' },
+  { name: '上級回復薬', rarity: 'rare', kind: 'consumable', power: 60, description: '濃縮された霊薬。HPを60回復。' },
+  { name: 'エリクサー', rarity: 'epic', kind: 'consumable', power: 100, description: '伝説の万能薬。HPを全回復。' },
+  { name: '錆びた短剣', rarity: 'common', kind: 'weapon', power: 1, description: '刃こぼれしているが無いよりはまし。攻撃+1' },
+  { name: '鉄の剣', rarity: 'common', kind: 'weapon', power: 2, description: '冒険者の定番。攻撃+2' },
+  { name: '銀の長剣', rarity: 'rare', kind: 'weapon', power: 4, description: '魔を払う銀の刃。攻撃+4' },
+  { name: '炎の魔剣', rarity: 'epic', kind: 'weapon', power: 6, description: '刀身に炎が宿る。攻撃+6' },
+  { name: '星砕きの聖剣', rarity: 'legendary', kind: 'weapon', power: 8, description: '星をも砕くと謳われた剣。攻撃+8' },
+  { name: '革の鎧', rarity: 'common', kind: 'armor', power: 1, description: '軽くて動きやすい。防御+1' },
+  { name: '鎖帷子', rarity: 'rare', kind: 'armor', power: 3, description: '細かな鎖で編まれた鎧。防御+3' },
+  { name: '銀の盾', rarity: 'rare', kind: 'armor', power: 3, description: '月光を映す盾。防御+3' },
+  { name: '竜鱗の鎧', rarity: 'epic', kind: 'armor', power: 6, description: '竜の鱗で作られた鎧。防御+6' },
+  { name: '古代の金貨', rarity: 'common', kind: 'treasure', power: 30, description: '失われた王国の金貨。' },
+  { name: '紅玉のペンダント', rarity: 'rare', kind: 'treasure', power: 120, description: '血のように赤い宝石。' },
+  { name: '月光の宝珠', rarity: 'epic', kind: 'treasure', power: 250, description: '淡く光り続ける不思議な珠。' },
+  { name: '深淵の王冠', rarity: 'legendary', kind: 'treasure', power: 500, description: '迷宮の主が戴いていた王冠。' },
+];
+
+function rollLoot(floor, boost = 0) {
+  const r = Math.random() + boost + floor * 0.05;
+  const rarity = r > 1.15 ? 'legendary' : r > 0.92 ? 'epic' : r > 0.62 ? 'rare' : 'common';
+  const pool = ITEM_POOL.filter((i) => i.rarity === rarity);
+  return { ...pick(pool) };
+}
+
+/* =====================================================================
+ * ゲーム状態
+ * ===================================================================== */
+let state = null;
+let busy = false;
+
+function newState() {
+  return {
+    hp: 100, maxHp: 100, atk: 5, def: 2, gold: 0,
+    inventory: [{ ...ITEM_POOL[0] }, { ...ITEM_POOL[0] }],
+    obtained: [],          // 冒険中に獲得したアイテム（リザルト用）
+    depth: 0,              // 踏破した部屋数
+    floors: settings.floors,
+    turns: 0,
+    log: [],               // { cls, text }
+    scene: null,
+    enemy: null,
+    over: false, victory: false,
+    aiTurns: 0, offlineTurns: 0,
+    startedAt: Date.now(),
+  };
+}
+const floorOf = (s) => Math.min(s.floors, Math.floor(s.depth / ROOMS_PER_FLOOR) + 1);
+const bossDepth = (s) => (s.floors - 1) * ROOMS_PER_FLOOR;
+
+/* =====================================================================
+ * オフライン（内蔵）イベント
+ * ===================================================================== */
+const mk = (text, effects = {}, extra = {}) => ({ outcome_text: text, effects, next_scene: null, ...extra });
+
+const ENEMIES = [
+  // tier 1
+  [
+    { name: 'ぷるぷるスライム', hp: 18, atk: 5, description: '粘液をまき散らす青いスライム。' },
+    { name: 'ゴブリンの斥候', hp: 22, atk: 6, description: '錆びた短剣を握る小鬼。' },
+    { name: '巨大コウモリ', hp: 16, atk: 7, description: '甲高い声で飛び回る。' },
+  ],
+  // tier 2
+  [
+    { name: 'スケルトン騎士', hp: 34, atk: 9, description: '朽ちた鎧をまとう骸骨の騎士。' },
+    { name: 'ミミック', hp: 30, atk: 11, description: '宝箱に化けた貪欲な魔物。' },
+    { name: 'ダークエルフの射手', hp: 28, atk: 10, description: '闇に潜み毒矢を放つ。' },
+  ],
+  // tier 3
+  [
+    { name: '石像ガーゴイル', hp: 46, atk: 12, description: '石の翼を持つ守護者。' },
+    { name: '亡霊の魔導士', hp: 40, atk: 14, description: '呪文を唱え続ける怨霊。' },
+    { name: 'ミノタウロス', hp: 55, atk: 13, description: '巨大な斧を振るう牛頭の戦士。' },
+  ],
+];
+const BOSS = { name: '深淵竜ヴォルガノス', hp: 130, atk: 14, description: '迷宮の最奥に眠る黒き竜。その瞳は溶岩のように燃えている。' };
+
+function makeEnemy(s) {
+  const f = floorOf(s);
+  const tier = Math.min(2, Math.floor((f - 1) / Math.max(1, (s.floors - 1) / 3)));
+  const base = pick(ENEMIES[tier]);
+  const hp = base.hp + rnd(0, 6) + (f - 1) * 3;
+  return { ...base, hp, maxHp: hp, atk: base.atk + Math.floor(f / 2) };
+}
+
+const COMBAT_CHOICES = [
+  { label: '⚔️ 剣で斬りかかる', kind: 'attack' },
+  { label: '🛡️ 盾を構えて隙を窺う', kind: 'defend' },
+  { label: '💥 渾身の一撃を狙う', kind: 'power' },
+  { label: '🏃 逃げ出す', kind: 'flee' },
+];
+const BOSS_CHOICES = COMBAT_CHOICES.filter((c) => c.kind !== 'flee');
+
+function combatScene(s, enemy, isBoss) {
+  return {
+    type: isBoss ? 'boss' : 'enemy',
+    title: isBoss ? `最深部 — ${enemy.name}` : `${enemy.name}が現れた！`,
+    text: isBoss
+      ? '巨大な扉の先、熱気が渦巻く大広間。眠りから覚めた黒竜がゆっくりと首をもたげ、侵入者を睨みつけた。'
+      : `${enemy.description}\n行く手を阻むように立ちはだかっている。`,
+    enemy: { ...enemy },
+    choices: (isBoss ? BOSS_CHOICES : COMBAT_CHOICES).map((c) => ({ ...c })),
+  };
+}
+
+const EVENT_TEMPLATES = [
+  {
+    type: 'treasure', title: '古びた宝箱',
+    text: '部屋の隅に、埃をかぶった宝箱がぽつんと置かれている。鍵穴の周りには奇妙な引っかき傷がある。',
+    choices: [
+      { label: '慎重に罠を調べてから開ける', act: (s) => chance(0.8)
+        ? (() => { const it = rollLoot(floorOf(s)); return mk(`罠を外して蓋を開けると、中には「${it.name}」が入っていた。`, { items_gained: [it], gold_change: rnd(5, 20) }); })()
+        : mk('調べている最中に毒針が飛び出した！', { hp_change: -rnd(6, 12) }) },
+      { label: '勢いよく蓋を開ける', act: (s) => chance(0.55)
+        ? (() => { const it = rollLoot(floorOf(s), 0.15); return mk(`蓋を開け放つと眩い光！「${it.name}」と金貨を手に入れた。`, { items_gained: [it], gold_change: rnd(20, 50) }); })()
+        : mk('宝箱がガタガタと震え、牙をむいた——ミミックだ！ 腕を噛まれた。', { hp_change: -rnd(10, 18) }) },
+      { label: '怪しいので無視して先へ進む', act: () => mk('君は宝箱を横目に通り過ぎた。背後で何かが舌打ちした気がする……。', {}) },
+    ],
+  },
+  {
+    type: 'event', title: '囁く泉',
+    text: '青白く光る泉が湧いている。水面から「飲め……」という囁きが聞こえる。',
+    choices: [
+      { label: '泉の水を飲む', act: () => chance(0.65)
+        ? mk('冷たい水が体中に染み渡り、傷が癒えていく。', { hp_change: rnd(25, 40) })
+        : mk('水は苦く、体が痺れた。呪われた泉だったようだ。', { hp_change: -rnd(8, 14) }) },
+      { label: '泉にゴールドを投げ入れて祈る', act: (s) => s.gold >= 20
+        ? mk('金貨が沈むと泉が金色に輝き、力が湧いてきた！（攻撃+1, 防御+1）', { gold_change: -20, atk_change: 1, def_change: 1 })
+        : mk('投げ入れる金貨が足りない。泉は沈黙した。', {}) },
+      { label: '水筒に汲んでおく', act: () => mk('泉の水を汲んだ。後で役立ちそうだ。', { items_gained: [{ name: '泉の聖水', rarity: 'rare', kind: 'consumable', power: 35, description: '囁く泉の水。HPを35回復。' }] }) },
+    ],
+  },
+  {
+    type: 'event', title: '旅の商人',
+    text: 'フードを目深にかぶった商人が、ランタンの灯りの下で品物を広げている。「迷宮で商売するのも楽じゃなくてねぇ」',
+    choices: [
+      { label: '回復薬を買う（30G）', act: (s) => s.gold >= 30
+        ? mk('「毎度あり」商人はにやりと笑った。', { gold_change: -30, items_gained: [{ ...ITEM_POOL[0] }] })
+        : mk('「お金が足りないねぇ。冷やかしはお断りだよ」', {}) },
+      { label: '武器を買う（80G）', act: (s) => s.gold >= 80
+        ? mk('商人は奥から一振りの長剣を取り出した。', { gold_change: -80, items_gained: [{ ...ITEM_POOL[5] }] })
+        : mk('「そいつは高級品さ。もう少し稼いでおいで」', {}) },
+      { label: '迷宮の噂話を聞く', act: () => mk('「最深部の竜は、渾身の一撃に弱いって話だ。運が良ければね」商人は小さな金貨を一枚くれた。', { gold_change: 10 }) },
+    ],
+  },
+  {
+    type: 'trap', title: '崩れかけた通路',
+    text: '天井から砂がぱらぱらと落ちてくる。床には不自然に色の違う石板が並んでいる。',
+    choices: [
+      { label: '色の違う石板を避けて歩く', act: () => chance(0.7)
+        ? mk('慎重に足を運び、無事に通路を抜けた。壁の隙間に金貨を見つけた。', { gold_change: rnd(10, 30) })
+        : mk('避けたはずの石が沈み、矢が飛んできた！', { hp_change: -rnd(8, 15) }) },
+      { label: '一気に走り抜ける', act: () => chance(0.5)
+        ? mk('崩落よりも速く駆け抜けた！ 息を切らしながら振り返ると、通路は瓦礫に埋もれていた。', {})
+        : mk('落ちてきた岩が肩を直撃した。', { hp_change: -rnd(12, 20) }) },
+      { label: '罠を解除してみる', act: (s) => chance(0.45)
+        ? (() => { const it = rollLoot(floorOf(s)); return mk(`見事に罠を解除！ 仕掛けの奥に隠されていた「${it.name}」を見つけた。`, { items_gained: [it] }); })()
+        : mk('仕掛けを誤って作動させてしまった。', { hp_change: -rnd(10, 18) }) },
+    ],
+  },
+  {
+    type: 'rest', title: '静かな野営跡',
+    text: 'かつての冒険者が残した焚き火の跡がある。ここなら少し休めそうだ。',
+    choices: [
+      { label: 'しっかり休む', act: () => chance(0.8)
+        ? mk('束の間の眠りで疲れが取れた。', { hp_change: rnd(30, 45) })
+        : mk('眠っている間に何者かに荷物を漁られた！ ゴールドが減っている。', { hp_change: 15, gold_change: -rnd(10, 30) }) },
+      { label: '残された荷物を調べる', act: (s) => { const it = rollLoot(floorOf(s)); return mk(`古びた背嚢の中から「${it.name}」が見つかった。持ち主の冥福を祈った。`, { items_gained: [it] }); } },
+      { label: '装備を手入れする', act: () => mk('武具を磨き直した。刃の輝きが戻った。（攻撃+1）', { atk_change: 1, hp_change: 10 }) },
+    ],
+  },
+  {
+    type: 'event', title: '囚われの冒険者',
+    text: '鉄格子の中で、傷だらけの戦士が助けを求めている。「頼む、鍵はあの骸骨が持っているはずだ……」',
+    choices: [
+      { label: '骸骨から鍵を探して助ける', act: (s) => chance(0.75)
+        ? mk('鍵を見つけて戦士を解放した。「恩に着る！」彼は礼に盾を差し出した。', { items_gained: [{ ...ITEM_POOL[10] }] })
+        : mk('骸骨が突然動き出し、引っかかれた！ それでも鍵を奪い、戦士を解放した。彼は金貨を分けてくれた。', { hp_change: -10, gold_change: rnd(30, 60) }) },
+      { label: '鉄格子を力ずくでこじ開ける', act: () => chance(0.5)
+        ? mk('渾身の力で鉄格子を曲げた！ 戦士は感謝し、鍛え方を教えてくれた。（攻撃+2）', { atk_change: 2 })
+        : mk('鉄格子はびくともせず、腕を痛めた。戦士は申し訳なさそうに回復薬をくれた。', { hp_change: -8, items_gained: [{ ...ITEM_POOL[0] }] }) },
+      { label: '罠かもしれない、立ち去る', act: () => mk('君は振り返らずに先へ進んだ。背後で戦士の姿が煙のように消えた——幻影だったのだ。', {}) },
+    ],
+  },
+  {
+    type: 'event', title: '古の祭壇',
+    text: '黒曜石の祭壇に、三つの窪みが刻まれている。それぞれ「力」「守り」「富」と古代文字が読める。',
+    choices: [
+      { label: '「力」の窪みに手を置く', act: () => mk('腕に灼けるような力が流れ込んだ。（攻撃+2, HP-8）', { atk_change: 2, hp_change: -8 }) },
+      { label: '「守り」の窪みに手を置く', act: () => mk('肌が硬質な光に包まれた。（防御+2）', { def_change: 2 }) },
+      { label: '「富」の窪みに手を置く', act: () => chance(0.6)
+        ? mk('祭壇の下から金貨が溢れ出した！', { gold_change: rnd(60, 120) })
+        : mk('「欲深き者よ……」祭壇が雷を放った！', { hp_change: -rnd(12, 20), gold_change: rnd(10, 30) }) },
+    ],
+  },
+  {
+    type: 'event', title: '分かれ道の石碑',
+    text: '道が左右に分かれ、石碑には「右は険しく実り多し、左は平らかにして安らか」と刻まれている。',
+    choices: [
+      { label: '険しい右の道へ', act: (s) => chance(0.6)
+        ? (() => { const it = rollLoot(floorOf(s), 0.2); return mk(`岩場をよじ登った先で「${it.name}」を発見した！`, { items_gained: [it], hp_change: -5 }); })()
+        : mk('足を滑らせて崖下に転落した。', { hp_change: -rnd(14, 22) }) },
+      { label: '平らな左の道へ', act: () => mk('穏やかな道だった。途中で薬草を摘んだ。', { hp_change: rnd(10, 20) }) },
+      { label: '石碑の裏を調べる', act: () => chance(0.5)
+        ? mk('石碑の裏に隠し金庫があった！', { gold_change: rnd(40, 80) })
+        : mk('何もなかった。少し時間を無駄にした。', {}) },
+    ],
+  },
+];
+
+function offlineScene(s) {
+  if (s.depth === bossDepth(s)) return combatScene(s, { ...BOSS, hp: BOSS.hp + (s.floors - 3) * 10, maxHp: BOSS.hp + (s.floors - 3) * 10 }, true);
+  if (chance(0.4)) return combatScene(s, makeEnemy(s), false);
+  const t = pick(EVENT_TEMPLATES);
+  return { type: t.type, title: t.title, text: t.text, enemy: null, choices: t.choices.map((c) => ({ ...c })) };
+}
+
+function classifyCombat(label) {
+  if (/逃|退|撤/.test(label)) return 'flee';
+  if (/防|守|盾|構え|回避|かわ/.test(label)) return 'defend';
+  if (/渾身|全力|必殺|魔法|呪文|一撃|奥義|特殊/.test(label)) return 'power';
+  return 'attack';
+}
+
+function offlineCombat(s, choice) {
+  const e = s.enemy;
+  const isBoss = s.scene.type === 'boss';
+  const kind = choice.kind || classifyCombat(choice.label);
+  const pAtk = s.atk + rnd(1, 6);
+  const eAtk = e.atk + rnd(0, 4);
+  let dmgE = 0, dmgP = 0, text = '', fled = false;
+
+  switch (kind) {
+    case 'defend':
+      dmgE = Math.ceil(pAtk / 2);
+      dmgP = Math.max(0, Math.floor(eAtk / 2) - s.def);
+      text = `盾で攻撃を受け流しつつ反撃！ ${e.name}に${dmgE}のダメージ。`;
+      break;
+    case 'power':
+      if (chance(isBoss ? 0.6 : 0.55)) { dmgE = pAtk * 2; text = `渾身の一撃が炸裂！ ${e.name}に${dmgE}の大ダメージ！`; }
+      else { dmgE = 0; text = '大振りの一撃は空を切った……！'; }
+      dmgP = Math.max(1, eAtk + 2 - s.def);
+      break;
+    case 'flee':
+      if (!isBoss && chance(0.6)) { fled = true; text = `隙を見て${e.name}から逃げ切った！`; }
+      else { dmgP = Math.max(1, eAtk - s.def); text = '逃げ道を塞がれてしまった！'; }
+      break;
+    default:
+      dmgE = pAtk;
+      dmgP = Math.max(1, eAtk - s.def);
+      text = `剣を振るい、${e.name}に${dmgE}のダメージを与えた。`;
+  }
+
+  const effects = { enemy_hp_change: -dmgE, fled };
+  if (!fled && e.hp - dmgE <= 0) {
+    const f = floorOf(s);
+    text += `\n${e.name}を倒した！`;
+    effects.gold_change = isBoss ? rnd(200, 300) : rnd(10, 25) * f;
+    if (isBoss) effects.items_gained = [{ ...ITEM_POOL[15] }];
+    else if (chance(0.35)) effects.items_gained = [rollLoot(f)];
+  } else if (!fled && dmgP > 0) {
+    text += `\n${e.name}の反撃！ ${dmgP}のダメージを受けた。`;
+    effects.hp_change = -dmgP;
+  } else if (!fled) {
+    text += `\n${e.name}の攻撃を完全に防いだ！`;
+  }
+  return mk(text, effects);
+}
+
+function offlineGeneric(s, choice) {
+  // AI が生成したシーンを途中からオフラインで解決する場合
+  const r = Math.random();
+  if (r < 0.35) return mk(`「${choice.label}」——慎重な行動が功を奏し、金貨を見つけた。`, { gold_change: rnd(15, 40) });
+  if (r < 0.6) { const it = rollLoot(floorOf(s)); return mk(`「${choice.label}」——その先で「${it.name}」を手に入れた。`, { items_gained: [it] }); }
+  if (r < 0.8) return mk(`「${choice.label}」——一息つくことができた。`, { hp_change: rnd(10, 20) });
+  return mk(`「${choice.label}」——しかし不運にも罠が作動した！`, { hp_change: -rnd(8, 15) });
+}
+
+function offlineResolve(s, choice) {
+  if (choice === null) {
+    return mk('松明の灯りを頼りに、君は「深淵の迷宮」の入口をくぐった。湿った空気と、遠くで響く獣の唸り声。伝説によれば、最深部には黒き竜と莫大な財宝が眠っているという——。', {});
+  }
+  if (s.enemy) return offlineCombat(s, choice);
+  if (typeof choice.act === 'function') return choice.act(s);
+  return offlineGeneric(s, choice);
+}
+
+/* =====================================================================
+ * AI（Claude API）
+ * ===================================================================== */
+const AI_SYSTEM = `あなたはダンジョン探索RPGのゲームマスターです。プレイヤーの選択に応じて、物語・イベント・敵・宝物を日本語で生成します。
+
+# 世界観
+「深淵の迷宮」：地下へ続く石造りの迷宮。最深部には迷宮の主（強大なボス）が眠る。ダークファンタジーだが、ユーモアや意外性も歓迎。
+
+# あなたの仕事
+入力のJSONには、プレイヤーの状態・現在のシーン・選んだ行動(action)・最近の出来事が含まれます。
+1. outcome_text：選んだ行動の結果を2〜4文で描写する。選択によって展開がはっきり変わるようにし、過去の出来事とも辻褄を合わせる。
+2. effects：結果に伴う数値の変化。
+3. next_scene：現在のシーンが終わった後の次のシーン。
+
+# 数値の目安（必ず守る）
+- hp_change：-30〜+40。危険な行動ほどダメージ、慎重さや休息は回復。
+- gold_change：-50〜+150。
+- atk_change / def_change：通常0、特別な恩恵で+1〜+2。
+- items_gained：0〜1個（ボス撃破時は2個まで）。rarityは階層が深いほど高くてよい。kindがweaponならpowerは攻撃力ボーナス(1〜8)、armorなら防御力ボーナス(1〜8)、consumableなら回復量(20〜80)、treasureなら価値(20〜500)。
+- consume_item：プレイヤーの所持品を消費する行動のときだけその名前、それ以外は空文字。
+- 戦闘中（current_scene.enemy がある）：プレイヤーの攻撃力(atk)を基準に enemy_hp_change（与ダメージ、0以下の値）を決め、敵の攻撃力(atk)からプレイヤーの防御力(def)を引いた程度を被ダメージとして hp_change に反映する。敵を倒す一撃なら反撃は受けない。逃走成功時は fled=true（ボス戦では逃走不可、常に false）。
+- 戦闘でない場合 enemy_hp_change は 0、fled は false。
+
+# next_scene のルール
+- type：event / enemy / treasure / trap / rest / boss のいずれか。
+- 戦闘中で、この行動の後も敵が生き残る場合：同じ敵との戦闘の続きを描く（type は現在と同じ、enemy も同じ敵）。
+- required_next_type が "boss" のとき、シーンが終わったら次は必ず type=boss（has_enemy=true、HP 110〜160、攻撃力 13〜18 の迷宮の主）。"not_boss" のときは boss を出さない。
+- 新しい敵を出すときは has_enemy=true とし、HP は 階層×8+10 前後、攻撃力は 階層×2+4 前後。敵が出ないシーンでは has_enemy=false（enemy の各値は空文字や0でよい）。
+- 単調にならないよう、イベント・敵・宝物・罠・休息をバランスよく混ぜる。同じ種類のシーンを連続させすぎない。
+- text は2〜4文で情景を描く。
+- choices は3〜4個。短い日本語の行動文で、性質の異なる選択肢にする（安全策・大胆策・ひらめき等）。戦闘時は攻撃・防御・特殊な行動・逃走（ボス以外）を含める。
+
+action が "START" のときは、outcome_text に冒険のプロローグを書き、next_scene に最初のシーンを作ってください。`;
+
+const ITEM_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['name', 'rarity', 'kind', 'power', 'description'],
+  properties: {
+    name: { type: 'string' },
+    rarity: { type: 'string', enum: ['common', 'rare', 'epic', 'legendary'] },
+    kind: { type: 'string', enum: ['consumable', 'weapon', 'armor', 'treasure'] },
+    power: { type: 'integer' },
+    description: { type: 'string' },
+  },
+};
+const TURN_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['outcome_text', 'effects', 'next_scene'],
+  properties: {
+    outcome_text: { type: 'string' },
+    effects: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['hp_change', 'gold_change', 'atk_change', 'def_change', 'enemy_hp_change', 'fled', 'items_gained', 'consume_item'],
+      properties: {
+        hp_change: { type: 'integer' },
+        gold_change: { type: 'integer' },
+        atk_change: { type: 'integer' },
+        def_change: { type: 'integer' },
+        enemy_hp_change: { type: 'integer' },
+        fled: { type: 'boolean' },
+        items_gained: { type: 'array', items: ITEM_SCHEMA },
+        consume_item: { type: 'string' },
+      },
+    },
+    next_scene: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['type', 'title', 'text', 'has_enemy', 'enemy', 'choices'],
+      properties: {
+        type: { type: 'string', enum: ['event', 'enemy', 'treasure', 'trap', 'rest', 'boss'] },
+        title: { type: 'string' },
+        text: { type: 'string' },
+        has_enemy: { type: 'boolean' },
+        enemy: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['name', 'hp', 'atk', 'description'],
+          properties: {
+            name: { type: 'string' },
+            hp: { type: 'integer' },
+            atk: { type: 'integer' },
+            description: { type: 'string' },
+          },
+        },
+        choices: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  },
+};
+
+async function aiResolve(s, choice) {
+  const sceneEnds = !s.enemy; // 戦闘でなければこの行動でシーンは終わる（戦闘は結果次第）
+  const nextDepth = choice === null ? 0 : s.depth + 1;
+  const payload = {
+    action: choice === null ? 'START' : choice.label,
+    player: {
+      hp: s.hp, maxHp: s.maxHp, atk: s.atk, def: s.def, gold: s.gold,
+      inventory: s.inventory.map((i) => `${i.name}(${KIND_LABEL[i.kind] || i.kind})`),
+    },
+    location: { floor: floorOf(s), total_floors: s.floors, rooms_cleared: s.depth, boss_at_room: bossDepth(s) },
+    current_scene: s.scene ? {
+      type: s.scene.type, title: s.scene.title, text: s.scene.text,
+      enemy: s.enemy ? { name: s.enemy.name, hp: s.enemy.hp, maxHp: s.enemy.maxHp, atk: s.enemy.atk } : null,
+    } : null,
+    required_next_type: nextDepth === bossDepth(s) ? 'boss' : 'not_boss',
+    scene_ends_after_action: sceneEnds ? true : 'enemy_hp次第',
+    recent_story: s.log.filter((l) => l.cls !== 'sys').slice(-8).map((l) => l.text),
+  };
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+  try {
+    const headers = {
+      'content-type': 'application/json',
+      'x-api-key': settings.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    };
+    const body = {
+      model: settings.model,
+      max_tokens: 8000,
+      system: AI_SYSTEM,
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: TURN_SCHEMA } },
+      messages: [{ role: 'user', content: JSON.stringify(payload) }],
+    };
+    // 安全分類器による拒否時のサーバー側フォールバック（Haiku は非対応）
+    if (FALLBACK_MODELS.includes(settings.model)) {
+      headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
+      body.fallbacks = 'default';
+    }
+    const res = await fetch(settings.endpoint || DEFAULT_ENDPOINT, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json())?.error?.message || ''; } catch (_) { /* ignore */ }
+      throw new Error(`HTTP ${res.status} ${detail}`.trim());
+    }
+    const data = await res.json();
+    if (data.stop_reason === 'refusal') throw new Error('AIが応答を拒否しました');
+    if (data.stop_reason === 'max_tokens') throw new Error('AIの応答が途中で切れました');
+    const textBlock = (data.content || []).find((b) => b.type === 'text');
+    if (!textBlock) throw new Error('AIの応答にテキストがありません');
+    return JSON.parse(textBlock.text);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* =====================================================================
+ * 結果の適用
+ * ===================================================================== */
+function sanitizeItem(raw) {
+  if (!raw || !raw.name) return null;
+  const rarity = RARITY_LABEL[raw.rarity] ? raw.rarity : 'common';
+  const kind = KIND_LABEL[raw.kind] ? raw.kind : 'treasure';
+  const range = { consumable: [10, 100], weapon: [1, 8], armor: [1, 8], treasure: [10, 500] }[kind];
+  return {
+    name: String(raw.name).slice(0, 30),
+    rarity, kind,
+    power: clamp(raw.power, range[0], range[1]),
+    description: String(raw.description || '').slice(0, 80),
+  };
+}
+
+function sanitizeScene(raw, s) {
+  if (!raw || typeof raw !== 'object') return null;
+  const type = TYPE_LABEL[raw.type] ? raw.type : 'event';
+  const choices = (Array.isArray(raw.choices) ? raw.choices : [])
+    .map((c) => String(typeof c === 'string' ? c : c?.label || '').trim().slice(0, 60))
+    .filter(Boolean).slice(0, 4).map((label) => ({ label }));
+  if (choices.length < 2) return null;
+  let enemy = null;
+  if (raw.has_enemy || type === 'enemy' || type === 'boss') {
+    const e = raw.enemy || {};
+    const isBoss = type === 'boss';
+    const hp = clamp(e.hp, isBoss ? 90 : 10, isBoss ? 200 : 90);
+    enemy = {
+      name: String(e.name || (isBoss ? '迷宮の主' : '謎の魔物')).slice(0, 30),
+      hp, maxHp: hp,
+      atk: clamp(e.atk, 3, isBoss ? 20 : 4 + floorOf(s) * 3),
+      description: String(e.description || '').slice(0, 120),
+    };
+  }
+  return {
+    type,
+    title: String(raw.title || TYPE_LABEL[type]).slice(0, 40),
+    text: String(raw.text || '').slice(0, 600),
+    enemy,
+    choices,
+  };
+}
+
+function log(cls, text) {
+  state.log.push({ cls, text });
+  const p = el('p', cls, text);
+  $('story').appendChild(p);
+  $('story').scrollTop = $('story').scrollHeight;
+}
+
+function gainItem(item) {
+  state.inventory.push(item);
+  state.obtained.push(item);
+  let extra = '';
+  if (item.kind === 'weapon') { state.atk = Math.min(MAX_ATK, state.atk + item.power); extra = `（攻撃+${item.power}）`; }
+  if (item.kind === 'armor') { state.def = Math.min(MAX_DEF, state.def + item.power); extra = `（防御+${item.power}）`; }
+  log('good', `🎁 「${item.name}」[${RARITY_LABEL[item.rarity]}] を手に入れた！${extra}`);
+}
+
+function applyResult(result, fromAI) {
+  const e = result.effects || {};
+  const isBossScene = state.scene && state.scene.type === 'boss';
+
+  if (result.outcome_text) log('', String(result.outcome_text).slice(0, 800));
+
+  // 消費アイテム（AIが指定した場合）
+  if (e.consume_item) {
+    const idx = state.inventory.findIndex((i) => i.name === e.consume_item && i.kind === 'consumable');
+    if (idx >= 0) { const [used] = state.inventory.splice(idx, 1); log('sys', `「${used.name}」を使った。`); }
+  }
+
+  const hpd = clamp(e.hp_change, -40, 100);
+  if (hpd) {
+    state.hp = Math.max(0, Math.min(state.maxHp, state.hp + hpd));
+    log(hpd < 0 ? 'dmg' : 'good', hpd < 0 ? `💔 HP ${hpd}` : `💚 HP +${hpd}`);
+  }
+  const gd = clamp(e.gold_change, -200, 400);
+  if (gd) {
+    const before = state.gold;
+    state.gold = Math.max(0, state.gold + gd);
+    const real = state.gold - before;
+    if (real) log(real < 0 ? 'dmg' : 'good', `💰 ${real > 0 ? '+' : ''}${real} G`);
+  }
+  const ad = clamp(e.atk_change, -2, 2), dd = clamp(e.def_change, -2, 2);
+  if (ad) { state.atk = clamp(state.atk + ad, 1, MAX_ATK); log('good', `⚔️ 攻撃力 ${ad > 0 ? '+' : ''}${ad}`); }
+  if (dd) { state.def = clamp(state.def + dd, 0, MAX_DEF); log('good', `🛡️ 防御力 ${dd > 0 ? '+' : ''}${dd}`); }
+
+  (Array.isArray(e.items_gained) ? e.items_gained : []).slice(0, isBossScene ? 2 : 1)
+    .map(fromAI ? sanitizeItem : (x) => x).filter(Boolean).forEach(gainItem);
+
+  // 敵の処理
+  let sceneEnded = !state.enemy;
+  if (state.enemy) {
+    const ed = clamp(e.enemy_hp_change, -80, 0);
+    state.enemy.hp = Math.max(0, state.enemy.hp + ed);
+    if (e.fled && !isBossScene) {
+      sceneEnded = true;
+      log('sys', `🏃 ${state.enemy.name}から逃れた。`);
+      state.enemy = null;
+    } else if (state.enemy.hp <= 0) {
+      sceneEnded = true;
+      log('sys', `🏆 ${state.enemy.name}を撃破！`);
+      state.enemy = null;
+      if (isBossScene) { state.over = true; state.victory = true; }
+    }
+  }
+
+  if (state.hp <= 0) { state.over = true; state.victory = false; }
+  return sceneEnded;
+}
+
+function decideNextScene(result, sceneEnded, fromAI) {
+  const aiScene = fromAI ? sanitizeScene(result.next_scene, state) : null;
+
+  if (!sceneEnded) {
+    // 戦闘継続：敵の状態はこちらで管理し、描写と選択肢だけAIのものを使う
+    const keepAi = aiScene && aiScene.enemy && (aiScene.type === 'enemy' || aiScene.type === 'boss');
+    const isBoss = state.scene.type === 'boss';
+    state.scene = {
+      ...state.scene,
+      text: keepAi ? aiScene.text : `${state.enemy.name}はまだ倒れない。荒い息をつきながら、次の一手を構えている。`,
+      choices: keepAi ? aiScene.choices : (isBoss ? BOSS_CHOICES : COMBAT_CHOICES).map((c) => ({ ...c })),
+    };
+    return;
+  }
+
+  state.depth += 1;
+  const needBoss = state.depth === bossDepth(state);
+  let next = aiScene;
+  if (next && next.enemy && next.type !== 'enemy' && next.type !== 'boss') next.type = 'enemy';
+  if (next && next.type === 'boss' && !needBoss) next.type = 'enemy';
+  if (next && needBoss && next.type !== 'boss') next = null;
+  if (next && (next.type === 'enemy' || next.type === 'boss') && !next.enemy) next = null;
+  if (!next) next = offlineScene(state);
+
+  if (floorOf(state) !== floorOf({ ...state, depth: state.depth - 1 })) {
+    log('sys', `🏰 —— 第${floorOf(state)}階層へ降りた ——`);
+  }
+  if (needBoss) log('sys', '🐉 最深部に到達した。圧倒的な気配がする……！');
+  state.scene = next;
+  state.enemy = next.enemy ? { ...next.enemy } : null;
+}
+
+/* =====================================================================
+ * ターン進行
+ * ===================================================================== */
+async function playTurn(choice) {
+  if (busy || (state && state.over)) return;
+  busy = true;
+  setChoicesEnabled(false);
+  if (choice) { state.turns += 1; log('action', `▶ ${choice.label}`); }
+
+  let result = null, fromAI = false;
+  if (aiEnabled()) {
+    $('loading').classList.add('show');
+    try {
+      result = await aiResolve(state, choice);
+      fromAI = true;
+      state.aiTurns += 1;
+    } catch (err) {
+      console.warn('AI error, fallback to offline:', err);
+      toast(`AIを利用できませんでした（${err.name === 'AbortError' ? 'タイムアウト' : err.message}）。内蔵イベントで続行します。`, 5000);
+    } finally {
+      $('loading').classList.remove('show');
+    }
+  }
+  if (!result) { result = offlineResolve(state, choice); state.offlineTurns += 1; }
+  updateModeBadge();
+
+  if (choice === null) {
+    // 開始：プロローグ + 最初のシーン
+    if (result.outcome_text) log('', String(result.outcome_text).slice(0, 800));
+    let first = fromAI ? sanitizeScene(result.next_scene, state) : null;
+    if (first && (first.type === 'boss')) first.type = 'enemy';
+    if (first && first.type === 'enemy' && !first.enemy) first = null;
+    state.scene = first || offlineScene(state);
+    state.enemy = state.scene.enemy ? { ...state.scene.enemy } : null;
+    log('sys', '🏰 —— 第1階層 ——');
+  } else {
+    const ended = applyResult(result, fromAI);
+    if (!state.over) decideNextScene(result, ended, fromAI);
+  }
+
+  busy = false;
+  render();
+  if (state.over) setTimeout(showResult, 900);
+}
+
+function useItem(idx) {
+  if (busy || !state || state.over) return;
+  const it = state.inventory[idx];
+  if (!it || it.kind !== 'consumable') return;
+  if (state.hp >= state.maxHp) { toast('HPは満タンです'); return; }
+  state.inventory.splice(idx, 1);
+  const before = state.hp;
+  state.hp = Math.min(state.maxHp, state.hp + it.power);
+  log('good', `🧪 「${it.name}」を使った。HP +${state.hp - before}`);
+  render();
+}
+
+/* =====================================================================
+ * 描画
+ * ===================================================================== */
+function updateModeBadge() {
+  const b = $('modeBadge');
+  if (aiEnabled()) { b.textContent = `🤖 AI: ${settings.model}`; b.className = 'badge ai'; }
+  else { b.textContent = '📖 内蔵イベントモード'; b.className = 'badge off'; }
+  $('titleMode').textContent = aiEnabled()
+    ? `AIモード（${settings.model}）で物語を生成します。`
+    : 'APIキー未設定のため、内蔵イベントで遊びます（設定からAIを有効化できます）。';
+}
+
+function setChoicesEnabled(on) {
+  document.querySelectorAll('#scene .choices button').forEach((b) => { b.disabled = !on; });
+}
+
+function render() {
+  if (!state) return;
+  $('sHp').textContent = `${state.hp} / ${state.maxHp}`;
+  $('hpBar').style.width = `${(state.hp / state.maxHp) * 100}%`;
+  $('sAtk').textContent = state.atk;
+  $('sDef').textContent = state.def;
+  $('sGold').textContent = `${state.gold} G`;
+  $('sFloor').textContent = `${floorOf(state)} / ${state.floors}F（部屋 ${Math.min(state.depth, bossDepth(state))}/${bossDepth(state)}）`;
+  $('depthBar').style.width = `${(Math.min(state.depth, bossDepth(state)) / bossDepth(state)) * 100}%`;
+  $('sTurn').textContent = state.turns;
+
+  const inv = $('inv');
+  inv.replaceChildren();
+  if (!state.inventory.length) inv.appendChild(el('li', 'note', '何も持っていない'));
+  state.inventory.forEach((it, i) => {
+    const li = el('li', it.kind === 'consumable' ? 'usable' : '');
+    const name = el('div', `r-${it.rarity}`, `${it.name}`);
+    name.appendChild(el('span', 'note', `  ${KIND_LABEL[it.kind]}・${RARITY_LABEL[it.rarity]}`));
+    li.appendChild(name);
+    li.appendChild(el('div', 'desc', it.description));
+    if (it.kind === 'consumable') { li.title = 'クリックで使用'; li.onclick = () => useItem(i); }
+    inv.appendChild(li);
+  });
+
+  const sc = $('scene');
+  sc.replaceChildren();
+  const scene = state.scene;
+  if (!scene || state.over) return;
+  sc.appendChild(el('div', 'scene-type', TYPE_LABEL[scene.type] || ''));
+  sc.appendChild(el('h3', '', scene.title));
+  sc.appendChild(el('div', 'text', scene.text));
+  if (state.enemy) {
+    const box = el('div', 'enemy');
+    box.appendChild(el('div', '', `👹 ${state.enemy.name}　HP ${state.enemy.hp} / ${state.enemy.maxHp}　攻撃 ${state.enemy.atk}`));
+    const bar = el('div', 'bar'); const fill = el('div'); fill.style.width = `${(state.enemy.hp / state.enemy.maxHp) * 100}%`;
+    bar.appendChild(fill); box.appendChild(bar);
+    sc.appendChild(box);
+  }
+  const ch = el('div', 'choices');
+  scene.choices.forEach((c) => {
+    const b = el('button', '', c.label);
+    b.onclick = () => playTurn(c);
+    ch.appendChild(b);
+  });
+  sc.appendChild(ch);
+}
+
+/* =====================================================================
+ * リザルト
+ * ===================================================================== */
+const itemValue = (it) => (it.kind === 'treasure' ? it.power : RARITY_VALUE[it.rarity] || 0);
+function computeScore(s) {
+  const items = s.obtained.reduce((a, it) => a + itemValue(it), 0);
+  return s.gold + items + floorOf(s) * 100 + (s.victory ? 1000 + s.hp * 5 : 0);
+}
+function rankOf(score, victory) {
+  if (!victory) return score >= 800 ? 'C' : 'D';
+  return score >= 2600 ? 'S' : score >= 2000 ? 'A' : score >= 1500 ? 'B' : 'C';
+}
+
+async function logHash(s) {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(s.log)));
+    return [...new Uint8Array(buf)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch (_) { return 'nohash'; }
+}
+
+let lastMemo = '';
+async function buildMemo(s) {
+  const score = computeScore(s);
+  const memo = {
+    app: 'AIDungeon',
+    v: 1,
+    result: s.victory ? 'CLEAR' : 'DEFEAT',
+    score,
+    rank: rankOf(score, s.victory),
+    floor: `${floorOf(s)}/${s.floors}`,
+    turns: s.turns,
+    gold: s.gold,
+    items: s.obtained.slice().sort((a, b) => itemValue(b) - itemValue(a)).slice(0, 5).map((i) => i.name),
+    ai: s.aiTurns > 0,
+    log: await logHash(s),
+    ts: Math.floor(Date.now() / 1000),
+  };
+  let str = JSON.stringify(memo);
+  while (new TextEncoder().encode(str).length > 500 && memo.items.length) { memo.items.pop(); str = JSON.stringify(memo); }
+  return str;
+}
+
+async function showResult() {
+  const s = state;
+  const score = computeScore(s);
+  $('resultTitle').textContent = s.victory ? '🏆 GAME CLEAR 🏆' : '💀 GAME OVER';
+  $('resultTitle').className = `result-title ${s.victory ? 'win' : 'lose'}`;
+  $('resultText').textContent = s.victory
+    ? '迷宮の主は倒れ、深淵に光が差し込んだ。君の名は伝説として語り継がれるだろう。'
+    : `第${floorOf(s)}階層で力尽きた……。だが、その挑戦は無駄ではない。`;
+  $('resultRank').textContent = `RANK ${rankOf(score, s.victory)}`;
+
+  const grid = $('resultGrid');
+  grid.replaceChildren();
+  [['スコア', score], ['到達階層', `${floorOf(s)} / ${s.floors}F`], ['ターン数', s.turns], ['所持ゴールド', `${s.gold} G`],
+   ['最終HP', `${s.hp} / ${s.maxHp}`], ['生成', s.aiTurns ? `AI ${s.aiTurns} / 内蔵 ${s.offlineTurns}` : '内蔵イベント']]
+    .forEach(([k, v]) => { const c = el('div', 'cell', k); c.appendChild(el('b', '', String(v))); grid.appendChild(c); });
+
+  const ul = $('resultItems');
+  ul.replaceChildren();
+  if (!s.obtained.length) ul.appendChild(el('li', 'note', '獲得アイテムなし'));
+  s.obtained.forEach((it) => {
+    const li = el('li');
+    const n = el('div', `r-${it.rarity}`, it.name);
+    n.appendChild(el('span', 'note', `  ${KIND_LABEL[it.kind]}・${RARITY_LABEL[it.rarity]}・価値 ${itemValue(it)}`));
+    li.appendChild(n); li.appendChild(el('div', 'desc', it.description));
+    ul.appendChild(li);
+  });
+
+  lastMemo = await buildMemo(s);
+  $('memoPreview').textContent = lastMemo;
+  $('recordStatus').replaceChildren();
+  updateRecordButton();
+  $('resultModal').classList.add('show');
+}
+
+/* =====================================================================
+ * Solana / Phantom
+ * ===================================================================== */
+const wallet = { provider: null, publicKey: null };
+const web3 = () => window.solanaWeb3;
+let connection = null;
+function getConnection() {
+  if (!web3()) throw new Error('Solana web3.js を読み込めませんでした（ネットワークを確認してください）');
+  const url = settings.rpc || DEFAULT_RPC;
+  if (!connection || connection.rpcEndpoint !== url) connection = new (web3().Connection)(url, 'confirmed');
+  return connection;
+}
+function getProvider() {
+  if (window.phantom?.solana?.isPhantom) return window.phantom.solana;
+  if (window.solana?.isPhantom) return window.solana;
+  return null;
+}
+const shortAddr = (a) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+
+async function connectWallet() {
+  if (wallet.publicKey) { // 切断
+    try { await wallet.provider.disconnect(); } catch (_) { /* ignore */ }
+    onWalletChange(null);
+    return;
+  }
+  const provider = getProvider();
+  if (!provider) {
+    if (location.protocol === 'file:') toast('file:// では Phantom が使えません。ローカルサーバーから開いてください。', 6000);
+    else { toast('Phantom が見つかりません。インストールページを開きます。'); window.open('https://phantom.app/', '_blank', 'noopener'); }
+    return;
+  }
+  try {
+    wallet.provider = provider;
+    const resp = await provider.connect();
+    onWalletChange(resp.publicKey);
+    provider.on?.('accountChanged', (pk) => onWalletChange(pk || null));
+    provider.on?.('disconnect', () => onWalletChange(null));
+  } catch (err) {
+    toast(`接続がキャンセルされました: ${err.message || err}`);
+  }
+}
+
+function onWalletChange(pk) {
+  wallet.publicKey = pk;
+  $('btnWallet').textContent = pk ? `👻 ${shortAddr(pk.toString())}（切断）` : '👻 Phantom接続';
+  $('wAddr').textContent = pk ? shortAddr(pk.toString()) : '未接続';
+  $('wAddr').title = pk ? pk.toString() : '';
+  $('btnAirdrop').disabled = !pk;
+  updateRecordButton();
+  refreshBalance();
+}
+
+async function refreshBalance() {
+  if (!wallet.publicKey) { $('wBal').textContent = '-'; return; }
+  try {
+    const lamports = await getConnection().getBalance(new (web3().PublicKey)(wallet.publicKey.toString()));
+    $('wBal').textContent = `${(lamports / 1e9).toFixed(4)} SOL`;
+  } catch (err) {
+    $('wBal').textContent = '取得失敗';
+    console.warn(err);
+  }
+}
+
+async function airdrop() {
+  if (!wallet.publicKey) return;
+  const btn = $('btnAirdrop');
+  btn.disabled = true; btn.textContent = '💧 リクエスト中…';
+  try {
+    const conn = getConnection();
+    const sig = await conn.requestAirdrop(new (web3().PublicKey)(wallet.publicKey.toString()), 1e9);
+    const bh = await conn.getLatestBlockhash();
+    await conn.confirmTransaction({ signature: sig, ...bh }, 'confirmed');
+    toast('1 SOL (Devnet) を受け取りました！');
+  } catch (err) {
+    console.warn(err);
+    toast('エアドロップに失敗しました（レート制限の可能性）。https://faucet.solana.com を開きます。', 6000);
+    window.open('https://faucet.solana.com/', '_blank', 'noopener');
+  } finally {
+    btn.disabled = false; btn.textContent = '💧 1 SOL エアドロップ (Devnet)';
+    refreshBalance();
+  }
+}
+
+function updateRecordButton() {
+  const btn = $('btnRecord');
+  btn.disabled = !wallet.publicKey || !lastMemo || !web3();
+  btn.textContent = wallet.publicKey ? '📝 Devnetに記録する' : '📝 記録するにはPhantomを接続';
+}
+
+async function recordOnChain() {
+  if (!wallet.publicKey || !lastMemo) return;
+  const W = web3();
+  const status = $('recordStatus');
+  const btn = $('btnRecord');
+  btn.disabled = true;
+  status.textContent = '⏳ トランザクションを作成中…';
+  try {
+    const conn = getConnection();
+    const payer = new W.PublicKey(wallet.publicKey.toString());
+    const ix = new W.TransactionInstruction({
+      programId: new W.PublicKey(MEMO_PROGRAM_ID),
+      keys: [{ pubkey: payer, isSigner: true, isWritable: false }],
+      data: new TextEncoder().encode(lastMemo),
+    });
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
+    const tx = new W.Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(ix);
+
+    status.textContent = '✍️ Phantom で署名してください…';
+    // Phantom のネットワーク設定に依存しないよう、署名のみ依頼し送信は Devnet RPC へ自前で行う
+    const signed = await wallet.provider.signTransaction(tx);
+    status.textContent = '📡 Devnet に送信中…';
+    const sig = await conn.sendRawTransaction(signed.serialize());
+    await conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+
+    status.replaceChildren();
+    status.appendChild(el('div', '', '✅ 記録しました！'));
+    const a = el('a', '', `Solana Explorer で見る: ${sig}`);
+    a.href = `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+    a.target = '_blank'; a.rel = 'noopener';
+    status.appendChild(a);
+    toast('冒険の記録が Devnet に刻まれました！');
+    refreshBalance();
+  } catch (err) {
+    console.error(err);
+    let msg = err.message || String(err);
+    if (/insufficient|0x1|debit an account/i.test(msg)) msg += '（Devnet SOL が不足しています。エアドロップしてください）';
+    status.textContent = `❌ 記録に失敗しました: ${msg}`;
+    btn.disabled = false;
+  }
+}
+
+async function showHistory() {
+  $('historyModal').classList.add('show');
+  const body = $('historyBody');
+  if (!wallet.publicKey) { body.textContent = 'Phantom ウォレットを接続すると、このアドレスで記録した冒険の一覧を表示します。'; return; }
+  body.textContent = '⏳ Devnet から取得中…';
+  try {
+    const sigs = await getConnection().getSignaturesForAddress(new (web3().PublicKey)(wallet.publicKey.toString()), { limit: 100 });
+    const recs = sigs.filter((x) => x.memo && x.memo.includes('"app":"AIDungeon"') && !x.err).map((x) => {
+      const json = x.memo.replace(/^\[\d+\]\s*/, '');
+      try { return { sig: x.signature, time: x.blockTime, data: JSON.parse(json) }; } catch (_) { return null; }
+    }).filter(Boolean);
+    body.replaceChildren();
+    if (!recs.length) { body.textContent = 'まだ記録がありません。冒険を終えて「Devnetに記録する」を押してみましょう。'; return; }
+    const ul = el('ul', 'hist');
+    recs.forEach((r) => {
+      const li = el('li');
+      const d = r.data;
+      li.appendChild(el('div', '', `${d.result === 'CLEAR' ? '🏆' : '💀'} ${d.result}　RANK ${d.rank}　スコア ${d.score}　${d.floor}F　${d.turns}ターン`));
+      li.appendChild(el('div', 'note', `${r.time ? new Date(r.time * 1000).toLocaleString() : ''}　アイテム: ${(d.items || []).join('、') || 'なし'}`));
+      const a = el('a', '', r.sig.slice(0, 32) + '…');
+      a.href = `https://explorer.solana.com/tx/${r.sig}?cluster=devnet`; a.target = '_blank'; a.rel = 'noopener';
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+    body.appendChild(ul);
+  } catch (err) {
+    body.textContent = `取得に失敗しました: ${err.message || err}`;
+  }
+}
+
+/* =====================================================================
+ * 設定モーダル・起動
+ * ===================================================================== */
+function openSettings() {
+  $('optUseAI').checked = settings.useAI;
+  $('optKey').value = settings.apiKey;
+  $('optSaveKey').checked = settings.saveKey;
+  $('optModel').value = settings.model;
+  $('optEndpoint').value = settings.endpoint === DEFAULT_ENDPOINT ? '' : settings.endpoint;
+  $('optFloors').value = String(settings.floors);
+  $('optRpc').value = settings.rpc === DEFAULT_RPC ? '' : settings.rpc;
+  $('settingsModal').classList.add('show');
+}
+function closeSettings() {
+  settings.useAI = $('optUseAI').checked;
+  settings.apiKey = $('optKey').value.trim();
+  settings.saveKey = $('optSaveKey').checked;
+  settings.model = $('optModel').value;
+  settings.endpoint = $('optEndpoint').value.trim() || DEFAULT_ENDPOINT;
+  settings.floors = Number($('optFloors').value) || 5;
+  settings.rpc = $('optRpc').value.trim() || DEFAULT_RPC;
+  saveSettings();
+  updateModeBadge();
+  refreshBalance();
+  $('settingsModal').classList.remove('show');
+  if (state && !state.over && state.floors !== settings.floors) toast('ダンジョンの深さは次の冒険から反映されます。');
+}
+
+function startGame() {
+  state = newState();
+  lastMemo = '';
+  $('story').replaceChildren();
+  $('titleScreen').style.display = 'none';
+  $('gameScreen').style.display = '';
+  $('resultModal').classList.remove('show');
+  render();
+  playTurn(null);
+}
+
+function init() {
+  loadSettings();
+  updateModeBadge();
+  if (location.protocol === 'file:') $('fileWarn').classList.add('show');
+  $('btnStart').onclick = startGame;
+  $('btnRestart').onclick = startGame;
+  $('btnSettings').onclick = openSettings;
+  $('btnSettingsClose').onclick = closeSettings;
+  $('btnWallet').onclick = connectWallet;
+  $('btnAirdrop').onclick = airdrop;
+  $('btnRecord').onclick = recordOnChain;
+  $('btnHistory').onclick = showHistory;
+  $('btnHistoryClose').onclick = () => $('historyModal').classList.remove('show');
+  ['settingsModal', 'historyModal'].forEach((id) => $(id).addEventListener('click', (e) => { if (e.target.id === id) $(id).classList.remove('show'); }));
+
+  // 既に許可済みなら自動再接続
+  const p = getProvider();
+  if (p) {
+    p.connect({ onlyIfTrusted: true }).then((r) => {
+      wallet.provider = p; onWalletChange(r.publicKey);
+      p.on?.('accountChanged', (pk) => onWalletChange(pk || null));
+    }).catch(() => {});
+  }
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
