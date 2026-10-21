@@ -75,6 +75,12 @@
   .scene-type { font-size: 12px; color: var(--muted); }
   .scene h3 { margin: 4px 0 8px; font-size: 18px; }
   .scene .text { line-height: 1.8; white-space: pre-wrap; }
+  .scene-art { margin: 4px 0 12px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; line-height: 0; }
+  .scene-art svg { display: block; width: 100%; height: auto; }
+  .scene-art .motif { transform-box: fill-box; transform-origin: center; animation: float 3.2s ease-in-out infinite; }
+  .scene-art .flame { animation: flicker 1.4s ease-in-out infinite alternate; }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  @keyframes flicker { from { opacity: .55; } to { opacity: 1; } }
   .enemy { margin: 10px 0; padding: 10px; border: 1px solid #5a2a2a; background: #2a1618; border-radius: 8px; }
   .enemy .bar > div { background: linear-gradient(90deg, #7a1f1f, #e05050); }
   .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
@@ -954,6 +960,66 @@ function updateModeBadge() {
     : 'APIキー未設定のため、内蔵イベントで遊びます（設定からAIを有効化できます）。';
 }
 
+/* シーン挿絵：外部画像や API を使わず、シーン種別とタイトル・敵名のキーワードからインライン SVG を生成する */
+const ART_PALETTE = {
+  event:    { top: '#2a1d4a', bottom: '#0d0a18', glow: '#9b6dff' },
+  enemy:    { top: '#3a1518', bottom: '#0d0a10', glow: '#e05050' },
+  treasure: { top: '#3a2f12', bottom: '#0f0c08', glow: '#e8c46a' },
+  trap:     { top: '#33280f', bottom: '#0d0b08', glow: '#ff9f40' },
+  rest:     { top: '#3a2210', bottom: '#100a06', glow: '#ff8a3d' },
+  boss:     { top: '#4a0f0f', bottom: '#080406', glow: '#ff4d1a' },
+};
+const ART_TYPE_MOTIF = { event: '🔮', enemy: '👹', treasure: '💎', trap: '🕸️', rest: '🔥', boss: '🐉' };
+const ART_KEYWORDS = [
+  [/竜|ドラゴン/, '🐉'], [/スライム|粘液/, '💧'], [/ゴブリン|小鬼|オーガ|鬼/, '👺'], [/コウモリ|蝙蝠/, '🦇'],
+  [/スケルトン|骸骨|骨/, '💀'], [/ミミック|宝箱/, '🧰'], [/エルフ|射手|弓/, '🏹'], [/ガーゴイル|石像|ゴーレム/, '🗿'],
+  [/亡霊|幽霊|霊|ゴースト|怨/, '👻'], [/ミノタウロス|牛/, '🐂'], [/魔導士|魔術師|魔女|魔法使い/, '🧙'],
+  [/蜘蛛|クモ/, '🕷️'], [/狼|ウルフ/, '🐺'], [/蛇|サーペント/, '🐍'], [/鼠|ネズミ/, '🐀'],
+  [/泉|水/, '⛲'], [/商人|店/, '🏮'], [/通路|崩|落石/, '🧱'], [/野営|焚き火|休/, '🏕️'], [/囚|牢|鉄格子/, '⛓️'],
+  [/祭壇|神殿|祈/, '🕯️'], [/石碑|分かれ道|碑/, '📜'], [/扉|門/, '🚪'], [/鏡/, '🪞'], [/書|本|図書/, '📖'],
+  [/罠|針|矢/, '⚠️'], [/金貨|財宝|宝/, '💰'],
+];
+
+function sceneMotif(scene, enemy) {
+  const key = `${enemy ? enemy.name : ''} ${scene.title || ''}`;
+  const hit = ART_KEYWORDS.find(([re]) => re.test(key));
+  return hit ? hit[1] : ART_TYPE_MOTIF[scene.type] || '🔮';
+}
+
+function sceneArt(scene, enemy) {
+  const p = ART_PALETTE[scene.type] || ART_PALETTE.event;
+  const motif = sceneMotif(scene, enemy);
+  const torch = (x) => `
+    <rect x="${x - 4}" y="120" width="8" height="40" fill="#3b2a1a"/>
+    <circle cx="${x}" cy="112" r="40" fill="url(#art-torch)"/>
+    <ellipse class="flame" cx="${x}" cy="110" rx="8" ry="14" fill="#ffb347"/>
+    <ellipse class="flame" cx="${x}" cy="113" rx="4" ry="8" fill="#fff1a8"/>`;
+  const box = el('div', 'scene-art');
+  // 挿入するのは定数のみ（AI 由来の文字列は含めない）
+  box.innerHTML = `
+  <svg viewBox="0 0 800 280" role="img" aria-label="${TYPE_LABEL[scene.type] || 'シーン'}の挿絵">
+    <defs>
+      <linearGradient id="art-bg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${p.top}"/><stop offset="1" stop-color="${p.bottom}"/>
+      </linearGradient>
+      <radialGradient id="art-glow"><stop offset="0" stop-color="${p.glow}" stop-opacity=".55"/><stop offset="1" stop-color="${p.glow}" stop-opacity="0"/></radialGradient>
+      <radialGradient id="art-torch"><stop offset="0" stop-color="#ffb347" stop-opacity=".45"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient>
+      <pattern id="art-brick" width="60" height="30" patternUnits="userSpaceOnUse">
+        <path d="M0 0H60M0 15H60M30 0V15M0 15V30M60 15V30" stroke="#000" stroke-opacity=".35" stroke-width="2" fill="none"/>
+      </pattern>
+    </defs>
+    <rect width="800" height="280" fill="url(#art-bg)"/>
+    <rect width="800" height="220" fill="url(#art-brick)"/>
+    <path d="M280 220V120a120 100 0 0 1 240 0V220Z" fill="#000" fill-opacity=".55"/>
+    <rect y="220" width="800" height="60" fill="#000" fill-opacity=".45"/>
+    <ellipse cx="400" cy="232" rx="170" ry="16" fill="#000" fill-opacity=".5"/>
+    ${torch(150)}${torch(650)}
+    <circle cx="400" cy="150" r="130" fill="url(#art-glow)"/>
+    <text class="motif" x="400" y="150" font-size="120" text-anchor="middle" dominant-baseline="central">${motif}</text>
+  </svg>`;
+  return box;
+}
+
 function setChoicesEnabled(on) {
   document.querySelectorAll('#scene .choices button').forEach((b) => { b.disabled = !on; });
 }
@@ -988,6 +1054,7 @@ function render() {
   if (!scene || state.over) return;
   sc.appendChild(el('div', 'scene-type', TYPE_LABEL[scene.type] || ''));
   sc.appendChild(el('h3', '', scene.title));
+  sc.appendChild(sceneArt(scene, state.enemy));
   sc.appendChild(el('div', 'text', scene.text));
   if (state.enemy) {
     const box = el('div', 'enemy');
